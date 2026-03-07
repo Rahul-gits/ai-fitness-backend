@@ -127,6 +127,7 @@ from fastapi import FastAPI
 app = FastAPI()
 import os
 import uvicorn
+from fastapi import FastAPI
 
 app = FastAPI()
 @app.get("/")
