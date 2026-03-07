@@ -5,8 +5,6 @@ from fastapi.responses import JSONResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
-import uvicorn
 
 from .core.config import settings
 from .core.redis import redis_service
@@ -163,7 +161,3 @@ async def test_endpoint():
 # ------------------------
 # Run Server (Railway Compatible)
 # ------------------------
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
