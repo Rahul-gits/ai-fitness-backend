@@ -6,6 +6,7 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+import uvicorn
 from .core.config import settings
 from .core.redis import redis_service
 from .core.middleware import RateLimitMiddleware
@@ -121,12 +122,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def root():
-    return {"message": "AI Fitness Backend Running 🚀"}
-import os
-import uvicorn
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app.main:app", host="0.0.0.0", port=port)
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"message": "AI Fitness Backend Running 🚀"}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
