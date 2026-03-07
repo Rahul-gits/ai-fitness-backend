@@ -7,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 import uvicorn
+
 from .core.config import settings
 from .core.redis import redis_service
 from .core.middleware import RateLimitMiddleware
 from .db.database import sync_engine, Base
+
 from .api.v1.auth import router as auth_router
 from .api.v1.workouts import router as workout_router
 from .api.v1.users import router as profile_router
@@ -25,77 +27,85 @@ from .api.v1.water import router as water_router
 from .api.v1.chatbot import router as chatbot_router
 from .api.v1.ai import router as ai_router
 
-# Setup logging
+
+# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+# Create FastAPI app
 app = FastAPI(title=settings.PROJECT_NAME)
 
-# Mount static files
-# Get absolute path to static directory
+
+# Static files
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Exception handler for database integrity errors (e.g. unique constraints)
+
+# ------------------------
+# Exception Handlers
+# ------------------------
+
 @app.exception_handler(IntegrityError)
 async def integrity_exception_handler(request: Request, exc: IntegrityError):
     logger.error(f"Integrity error: {str(exc)}")
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": "Database integrity error. This usually means a unique constraint failed (e.g. username or email already exists)."},
+        content={"detail": "Database integrity error. Possible duplicate username/email."},
     )
 
-# General exception handler to ensure CORS headers on 500s
+
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error. Please check server logs."},
+        content={"detail": "Internal server error"},
     )
 
-# Custom exception handler for validation errors
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
     for error in exc.errors():
-        loc = error.get("loc")
+        field = error.get("loc")[-1] if error.get("loc") else "field"
         msg = error.get("msg")
-        # Simplify error message for frontend
-        field = loc[-1] if loc else "field"
         errors.append(f"{field}: {msg}")
-    
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": ", ".join(errors)},
     )
 
-# Create database tables (Sync for startup, better to use Alembic in prod)
-# Only run this if not using migrations
-Base.metadata.create_all(bind=sync_engine)
+
+# ------------------------
+# Startup / Shutdown
+# ------------------------
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Starting AI Fitness Backend")
+
+    # create tables
+    Base.metadata.create_all(bind=sync_engine)
+
+    # connect redis
     await redis_service.connect()
-    # If using postgres, we might want to ensure connection here
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    logger.info("Shutting down AI Fitness Backend")
     await redis_service.disconnect()
 
-# Security headers middleware
-# @app.middleware("http")
-# async def add_security_headers(request: Request, call_next):
-#    ... (rest of the code)
 
-@app.get("/api/v1/test")
-async def test_endpoint():
-    return {"status": "ok"}
+# ------------------------
+# API Routers
+# ------------------------
 
-# Include API routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(workout_router, prefix=settings.API_V1_STR)
 app.include_router(profile_router, prefix=settings.API_V1_STR)
@@ -110,10 +120,18 @@ app.include_router(water_router, prefix=settings.API_V1_STR)
 app.include_router(chatbot_router, prefix=settings.API_V1_STR)
 app.include_router(ai_router, prefix=settings.API_V1_STR)
 
-# Add RateLimitMiddleware
-app.add_middleware(RateLimitMiddleware, redis_service=redis_service, limit=100, window=60)
 
-# CORS configuration (Added LAST so it wraps everything else and runs FIRST for requests)
+# ------------------------
+# Middleware
+# ------------------------
+
+app.add_middleware(
+    RateLimitMiddleware,
+    redis_service=redis_service,
+    limit=100,
+    window=60,
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -122,18 +140,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from fastapi import FastAPI
 
-app = FastAPI()
+# ------------------------
+# Health Routes
+# ------------------------
 
 @app.get("/")
-def root():
+async def root():
     return {"message": "AI Fitness Backend Running 🚀"}
+
+
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}
-import os
-import uvicorn
+
+
+@app.get("/api/v1/test")
+async def test_endpoint():
+    return {"status": "ok"}
+
+
+# ------------------------
+# Run Server (Railway Compatible)
+# ------------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
