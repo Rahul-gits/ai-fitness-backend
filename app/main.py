@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
+import os
 from .core.config import settings
 from .core.redis import redis_service
 from .core.middleware import RateLimitMiddleware
