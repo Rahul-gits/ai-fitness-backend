@@ -123,10 +123,7 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {
-        "status": "Backend running", 
-        "docs_url": "/docs"
-    }
+    return {"message": "AI Fitness Backend Running 🚀"}
 import os
 import uvicorn
 
