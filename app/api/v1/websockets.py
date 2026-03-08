@@ -7,14 +7,16 @@ from typing import Optional
 import base64
 import numpy as np
 import cv2
+import logging
+
+logger = logging.getLogger(__name__)
+
 try:
     from ...core_ai.pose.pose_detector import detect_pose
 except ImportError:
-    print("Warning: Pose detector import failed.")
     def detect_pose(*args, **kwargs):
         return None, None, None
-except Exception as e:
-    print(f"Warning: Pose detector error: {e}")
+except Exception:
     def detect_pose(*args, **kwargs):
         return None, None, None
 
@@ -23,10 +25,10 @@ from ...db.models import User, ChatMessage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from .voice_commands import get_user_context, format_fitness_summary
+
 try:
     from ...core_ai.coach.llm_coach import stream_llm_async, PERSONA_PROMPTS
-except Exception as e:
-    print(f"Warning: Coach import failed: {e}")
+except Exception:
     stream_llm_async = None
     PERSONA_PROMPTS = {}
 
@@ -46,7 +48,6 @@ async def get_user_from_token(token: str, db: AsyncSession) -> Optional[User]:
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
-    print(f"WS Connection Attempt. Token: {token[:15] if token else 'None'}...")
     await websocket.accept()
     
     # Check if it's a JWT or a username
@@ -58,18 +59,15 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
             
             # If JWT fails, try as plain username (fallback for dev)
             if not user:
-                print(f"WS Token decode failed, trying username fallback for: {token[:15]}...")
                 result = await db.execute(select(User).filter(User.username == token))
                 user = result.scalars().first()
         
         if not user:
-            print("WS Reject: User not found or no token")
             await websocket.close(code=1008)
             return
 
         # If we reach here, user is authenticated
         user_id_str = user.username
-        print(f"WS Authenticated: {user_id_str}")
         await manager.connect(websocket, user_id_str)
         
         try:
@@ -115,7 +113,6 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                     }), opponent_id)
 
                 elif message["type"] == "chat_message":
-                    # { "type": "chat_message", "target_username": "username", "message": "hello" }
                     target_username = message["target_username"]
                     chat_text = message["message"]
                     
@@ -182,9 +179,8 @@ async def vision_websocket_endpoint(websocket: WebSocket):
                             "type": "no_pose"
                         }))
     except WebSocketDisconnect:
-        print("Vision WS disconnected")
-    except Exception as e:
-        print(f"Vision WS error: {e}")
+        pass
+    except Exception:
         await websocket.close()
 
 @router.websocket("/ws/coach")
@@ -226,8 +222,7 @@ async def coach_websocket_endpoint(websocket: WebSocket, token: Optional[str] = 
                             chat_history.append({"role": "user", "content": user_text})
                             chat_history.append({"role": "assistant", "content": reply})
                             await websocket.send_text(json.dumps({"type": "coach_reply_end", "reply": reply}))
-                        except Exception as e:
-                            print(f"WS Coach Error: {e}")
+                        except Exception:
                             await websocket.send_text(json.dumps({"type": "coach_reply_end", "reply": "I'm currently unavailable. Please try again."}))
                     else:
                         await websocket.send_text(json.dumps({"type": "coach_reply_end", "reply": f"{persona}: {user_text}"}))
@@ -235,8 +230,8 @@ async def coach_websocket_endpoint(websocket: WebSocket, token: Optional[str] = 
                     await websocket.send_text(json.dumps({"type": "ack"}))
         except WebSocketDisconnect:
             return
-        except Exception as e:
+        except Exception:
             try:
-                await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+                await websocket.send_text(json.dumps({"type": "error", "message": "Connection error"}))
             finally:
                 await websocket.close()

@@ -27,11 +27,9 @@ async def get_current_user(
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except JWTError as e:
-        print(f"DEBUG: JWT decode failed: {str(e)}")
+    except JWTError:
         raise credentials_exception
     
-    print(f"DEBUG: Validated user: {username}")
     result = await db.execute(
         select(User)
         .where(User.username == username)
@@ -40,6 +38,5 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     
     if user is None:
-        print(f"DEBUG: User not found in DB: {username}")
         raise credentials_exception
     return user

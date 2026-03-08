@@ -3,6 +3,9 @@ from ..core.config import settings
 import json
 import time
 from typing import Optional, Any, Dict
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RedisService:
     def __init__(self):
@@ -22,16 +25,14 @@ class RedisService:
                 password=settings.REDIS_PASSWORD,
                 db=settings.REDIS_DB,
                 decode_responses=True,
-                socket_connect_timeout=0.5, # Slightly more time for initial connect
+                socket_connect_timeout=0.5,
                 socket_timeout=0.5
             )
             # Ping to verify connection
             await self.redis_client.ping()
-            print("✅ Connected to Redis successfully")
         except Exception:
-            # Silence the error to avoid log spam
+            # Silently fail - use in-memory fallback
             self.redis_client = None
-            print("ℹ️ Redis not available. Using in-memory fallback for rate limiting.")
 
     async def disconnect(self):
         if self.redis_client:
