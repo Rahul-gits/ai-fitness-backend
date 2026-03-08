@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, status
+from contextlib import asynccontextmanager
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import IntegrityError
 from fastapi.responses import JSONResponse
@@ -8,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 import uvicorn
-from .core.config import settings
-from .core.redis import redis_service
+from app.core.config import settings
+from app.core.redis import redis_service
 from .core.middleware import RateLimitMiddleware
 from .db.database import sync_engine, Base
 from .api.v1.auth import router as auth_router
@@ -27,6 +28,7 @@ from .api.v1.chatbot import router as chatbot_router
 from .api.v1.ai import router as ai_router
 
 logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
 logging.getLogger("sqlalchemy.pool").setLevel(logging.ERROR)
