@@ -34,15 +34,26 @@ logger = logging.getLogger(__name__)
 logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
 logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
 
-# Lifespan context manager (replaces deprecated on_event)
+# Lifespan context manager with error handling
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await redis_service.connect()
+    try:
+        await redis_service.connect()
+        logger.info("Redis connected")
+    except Exception as e:
+        logger.warning(f"Redis connection failed: {e}")
+    
     logger.info("Application startup complete")
     yield
+    
     # Shutdown
-    await redis_service.disconnect()
+    try:
+        await redis_service.disconnect()
+        logger.info("Redis disconnected")
+    except Exception as e:
+        logger.warning(f"Redis disconnect error: {e}")
+    
     logger.info("Application shutdown complete")
 
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
@@ -54,25 +65,23 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Exception handler for database integrity errors
+# Exception handlers
 @app.exception_handler(IntegrityError)
 async def integrity_exception_handler(request: Request, exc: IntegrityError):
     logger.error(f"Integrity error: {str(exc)}")
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"detail": "Database integrity error. This usually means a unique constraint failed (e.g. username or email already exists)."},
+        content={"detail": "Database integrity error. Unique constraint failed."},
     )
 
-# General exception handler
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error. Please check server logs."},
+        content={"detail": "Internal server error"},
     )
 
-# Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
@@ -89,6 +98,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # Create database tables
 Base.metadata.create_all(bind=sync_engine)
+
+# Health check endpoints
+@app.get("/")
+def root():
+    return {"message": "AI Fitness Backend Running 🚀"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.get("/api/v1/test")
 async def test_endpoint():
@@ -109,10 +127,8 @@ app.include_router(water_router, prefix=settings.API_V1_STR)
 app.include_router(chatbot_router, prefix=settings.API_V1_STR)
 app.include_router(ai_router, prefix=settings.API_V1_STR)
 
-# Add RateLimitMiddleware
+# Middleware
 app.add_middleware(RateLimitMiddleware, redis_service=redis_service, limit=100, window=60)
-
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -120,14 +136,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/")
-def root():
-    return {"message": "AI Fitness Backend Running 🚀"}
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
