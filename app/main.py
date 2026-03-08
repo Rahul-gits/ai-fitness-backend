@@ -26,14 +26,11 @@ from .api.v1.water import router as water_router
 from .api.v1.chatbot import router as chatbot_router
 from .api.v1.ai import router as ai_router
 
-# Setup logging - WARNING level to reduce verbosity
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.ERROR)
 
-# Suppress SQLAlchemy debug logging
-logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
-logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
-
+logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.ERROR)
+logging.getLogger("uvicorn").setLevel(logging.ERROR)
 # Lifespan context manager with error handling
 @asynccontextmanager
 async def lifespan(app: FastAPI):
