@@ -1,31 +1,25 @@
-import os
 import json
 import httpx
 import logging
-from dotenv import load_dotenv, find_dotenv
 from typing import AsyncGenerator
 
-# Load nearest .env
-_dotenv_path = find_dotenv(usecwd=True)
-load_dotenv(_dotenv_path, override=True)
+from app.core.config import settings
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-XAI_API_KEY = os.getenv("XAI_API_KEY", "")
-XAI_MODEL = os.getenv("XAI_MODEL", "")
+_gemini_key = settings.GEMINI_API_KEY or ""
+_xai_key = settings.XAI_API_KEY or ""
+_groq_key = settings.GROQ_API_KEY or ""
 
-if GEMINI_API_KEY and "REPLACE" not in GEMINI_API_KEY:
+if _gemini_key and "REPLACE" not in _gemini_key:
     _base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
-    _api_key = GEMINI_API_KEY
-    _model = GEMINI_MODEL
-elif XAI_API_KEY and "REPLACE" not in XAI_API_KEY:
+    _api_key = _gemini_key
+    _model = settings.GEMINI_MODEL
+elif _xai_key and "REPLACE" not in _xai_key:
     _base_url = "https://api.x.ai/v1"
-    _api_key = XAI_API_KEY
-    _model = XAI_MODEL or "grok-3-mini-beta"
-elif GROQ_API_KEY and "REPLACE" not in GROQ_API_KEY:
+    _api_key = _xai_key
+    _model = settings.XAI_MODEL or "grok-3-mini-beta"
+elif _groq_key and "REPLACE" not in _groq_key:
     _base_url = "https://api.groq.com/openai/v1"
-    _api_key = GROQ_API_KEY
+    _api_key = _groq_key
     _model = "llama-3.1-8b-instant"
 else:
     _base_url = ""
